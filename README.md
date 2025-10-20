@@ -1,5 +1,5 @@
-# 3200-a2
-Assignment 2 in INF-3200: Distributed hash table using Chord.
+# 3200-a3
+Assignment 3 in INF-3200: Distributed hash table using Chord.
 
 ## How to run
 The only step required is to run the **run.sh** script with a given number of chord nodes.
