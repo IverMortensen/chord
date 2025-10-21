@@ -107,22 +107,14 @@ done
 echo "Waiting for nodes to start..."
 sleep 6
 
-# Set up successors
-for i in "${!nodes[@]}"; do
-    node="${nodes[$i]}"
-    port="${ports[$i]}"
-    successor_endpoint="${successor_endpoints[$i]}"
-    echo "Sending $node:$port successor $successor_endpoint"
-    curl -X PUT -d "$successor_endpoint" "$node:$port/successor"
-    echo "Completed node $node"
-done
 
-# Set up finger tables
+# Set up successors
+boot_node="${nodes[0]}:${ports[0]}"
 for i in "${!nodes[@]}"; do
     node="${nodes[$i]}"
     port="${ports[$i]}"
-    echo "Fixing fingers for node $node:$port..."
-    curl -X PUT "$node:$((port))/fix_fingers"
+    echo "Sending $node:$port successor $boot_node"
+    curl -X PUT -d "$boot_node" "$node:$port/successor"
     echo "Completed node $node"
 done
 
