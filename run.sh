@@ -114,7 +114,7 @@ for i in "${!nodes[@]}"; do
     node="${nodes[$i]}"
     port="${ports[$i]}"
     echo "Sending $node:$port successor $boot_node"
-    curl -X PUT -d "$boot_node" "$node:$port/successor"
+    curl -X POST "$node:$port/join/$boot_node"
     echo "Completed node $node"
 done
 

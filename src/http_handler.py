@@ -83,6 +83,17 @@ class HTTPHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404, "Not Found")
 
+    def do_POST(self):
+        """
+        Handles post requests.
+        """
+        if self.path.startswith("/join/"):
+            try:
+                address = self.path.split("/join/")[1]
+                self.post_join(address)
+            except (ValueError, IndexError):
+                self.send_error(400, "Invalid key format")
+
     def get_status(self):
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
@@ -252,44 +263,30 @@ class HTTPHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(value.encode("utf-8"))
 
-    def put_successor(self):
+    def put_fix_fingers(self):
         """
-        Updates the nodes successor.
+        Tells the node to update its finger table
         Response:
-            200 on successful update
-            400 if process fails
+            200 when request has been received
         """
-        content_length = int(self.headers.get("Content-Length", 0))
-        if not content_length:
-            self.send_error(400, "Empty request body")
-            return
+        self.node.fix_fingers()
 
-        # Get the successor from the body
-        body = self.rfile.read(content_length)
-        try:
-            successor_endpoint = body.decode("utf-8").strip()
-        except UnicodeDecodeError:
-            self.send_error(400, "Invalid UTF-8 encoding")
-            return
-
-        # Set the nodes new successor
-        self.node.successor = successor_endpoint
-
-        successor_id = self.node.hash_key(successor_endpoint)
-        log.info(f"{self.node.id} -> {successor_id}")
-
-        self.node.logger.log_node_status()
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
 
-    def put_fix_fingers(self):
+    def post_join(self, node: str):
         """
-        Tells a node to update its finger table
+        Tells the node to join the chord network of the given node
         Response:
-            200 when node has received the request
+            200 when request has been received
         """
-        self.node.fix_fingers()
+        # Set the node as the successor
+        self.node.successor = node
+
+        node_id = self.node.hash_key(node)
+        log.info(f"{self.node.id} -> {node_id}")
+        self.node.logger.join(node_id)
 
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")

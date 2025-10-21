@@ -50,6 +50,9 @@ class ChordLogger:
         else:
             self.log_event("client_request", request=request)
 
+    def join(self, node: int):
+        self.log_event("join", node=node)
+
     def check_key(self, key):
         self.log_event("check_key", key=key)
 

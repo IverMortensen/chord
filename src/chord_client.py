@@ -38,9 +38,3 @@ def set_value(node: str, key: str, value: str) -> Response:
     return requests.put(
         f"http://{node}/value/{key}", data=value, timeout=(CON_TIMEOUT, READ_TIMEOUT)
     )
-
-
-def set_successor(node: str) -> Response:
-    return requests.put(
-        f"http://{node}/successor", data=node, timeout=(CON_TIMEOUT, READ_TIMEOUT)
-    )
