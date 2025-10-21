@@ -1,9 +1,8 @@
-from __future__ import annotations
 from typing import List
-import requests
 
 import logging as log
 import hashlib
+import chord_client
 from chord_logger import ChordLogger
 
 
@@ -15,7 +14,8 @@ class ChordNode:
         self.m: int = m
 
         self.id: int = id
-        self.successor: str | None = None
+        self.successor: str = self.address
+        self.predecessor: str | None = None
         self.finger_table: List[str | None] = [None] * (self.m + 1)
         self.storage = {}
 
@@ -23,26 +23,88 @@ class ChordNode:
             self, f"/mnt/users/imo059/chord_logs/chord_log-{self.id}.log"
         )
 
-    def get_id(self) -> int:
-        return self.id
+    def join(self, other: str):
+        self.predecessor = None
+        self.successor = other
 
-    def get_successor(self) -> str | None:
-        return self.successor
+    def stabilize(self):
+        # Get our successor's predecessor
+        response = chord_client.get_predecessor(self.successor)
+        if response.status_code == 404:
+            log.info("Successor doesn't have a predecessor.")
+        elif response.status_code != 200:
+            log.error(
+                f"Stabilize failed. Could not find predecessor of {self.successor}: {response.text}"
+            )
+        predecessor = response.text
 
-    def get_endpoint(self) -> str:
-        return f"{self.ip}:{self.port}"
+        successor_id = self.hash_key(self.successor)
 
-    def get_ip(self) -> str:
-        return self.ip
+        if response.status_code == 200:
+            # If our successor's predecessor is us everything is fine
+            if predecessor == self.address:
+                # log.info(f"Successor's predecessor is me: {self.id} <- {successor_id}")
+                return
 
-    def get_port(self) -> int:
-        return self.port
+            x = self.hash_key(predecessor)
+
+            # Check if the predecessor is within us and our successor
+            within = False
+            if self.id < successor_id:
+                within = x > self.id and x <= successor_id
+            else:
+                within = x > self.id or x <= successor_id
+
+            # If this is the case update our successor
+            if within:
+                log.info(f"Updating successor: {self.id} -> {x}")
+                self.successor = predecessor
+
+        # Notify successor that we might be its predecessor
+        chord_client.notify(self.successor, self.address)
+
+    def notify(self, new_predecessor: str):
+        # If no predecessor, set it to the new one
+        if self.predecessor is None:
+            log.info(
+                f"Updating predecessor: {self.hash_key(new_predecessor)} <- {self.id}"
+            )
+            self.predecessor = new_predecessor
+            return
+
+        predesessor_id = self.hash_key(self.predecessor)
+        new_predecessor_id = self.hash_key(new_predecessor)
+
+        # Check if the new predecessor is within current predecessor and us
+        within = False
+        if predesessor_id < self.id:
+            within = (
+                new_predecessor_id > predesessor_id and new_predecessor_id <= self.id
+            )
+        else:
+            within = (
+                new_predecessor_id > predesessor_id or new_predecessor_id <= self.id
+            )
+        if within:
+            log.info(
+                f"Updating predecessor: {self.hash_key(new_predecessor)} <- {self.id}"
+            )
+            self.predecessor = new_predecessor
 
     def fix_fingers(self):
         for i in range(1, self.m + 1):
             id = (self.id + 2 ** (i - 1)) % (2**self.m)
             self.finger_table[i] = self.find_successor(id)
         self.logger.fix_fingers()
+
+    def check_predecessor(self):
+        if self.predecessor is None:
+            return
+
+        response = chord_client.get_status(self.predecessor)
+        if response.status_code != 200:
+            log.info(f"Predecessor {self.predecessor} has failed.")
+            self.predecessor = None
 
     def insert_value(self, key: str, value: str):
         self.logger.insert_value(key, value)
@@ -110,7 +172,7 @@ class ChordNode:
             )
 
             # Pass the find successor check to the closest node and return its result
-            response = requests.get(f"http://{closest_node}/successor/{id}")
+            response = chord_client.find_successor(closest_node, id)
             if response.status_code != 200:
                 return None
             successor = response.text
@@ -123,7 +185,7 @@ class ChordNode:
         )
 
         # Pass the find successor check to the successor node and return its result
-        response = requests.get(f"http://{self.successor}/successor/{id}")
+        response = chord_client.find_successor(self.successor, id)
         if response.status_code != 200:
             return None
         successor = response.text
