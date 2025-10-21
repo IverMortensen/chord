@@ -57,6 +57,7 @@ class ChordNode:
 
             # If this is the case update our successor
             if within:
+                self.logger.updated_successor(x)
                 log.info(f"Updating successor: {self.id} -> {x}")
                 self.successor = predecessor
 
@@ -64,31 +65,27 @@ class ChordNode:
         chord_client.notify(self.successor, self.address)
 
     def notify(self, new_predecessor: str):
-        # If no predecessor, set it to the new one
-        if self.predecessor is None:
-            log.info(
-                f"Updating predecessor: {self.hash_key(new_predecessor)} <- {self.id}"
-            )
-            self.predecessor = new_predecessor
-            return
-
-        predesessor_id = self.hash_key(self.predecessor)
+        within = False
         new_predecessor_id = self.hash_key(new_predecessor)
 
-        # Check if the new predecessor is within current predecessor and us
-        within = False
-        if predesessor_id < self.id:
-            within = (
-                new_predecessor_id > predesessor_id and new_predecessor_id <= self.id
-            )
-        else:
-            within = (
-                new_predecessor_id > predesessor_id or new_predecessor_id <= self.id
-            )
-        if within:
-            log.info(
-                f"Updating predecessor: {self.hash_key(new_predecessor)} <- {self.id}"
-            )
+        if self.predecessor:
+            predecessor_id = self.hash_key(self.predecessor)
+
+            # Check if the new predecessor is within current predecessor and us
+            if predecessor_id < self.id:
+                within = (
+                    new_predecessor_id > predecessor_id
+                    and new_predecessor_id <= self.id
+                )
+            else:
+                within = (
+                    new_predecessor_id > predecessor_id or new_predecessor_id <= self.id
+                )
+
+        # If predecessor isn't set or new predecessor is within, update predecessor
+        if self.predecessor is None or within:
+            self.logger.updated_predecessor(new_predecessor_id)
+            log.info(f"Updating predecessor: {new_predecessor_id} <- {self.id}")
             self.predecessor = new_predecessor
 
     def fix_fingers(self):

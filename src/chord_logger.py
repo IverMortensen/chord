@@ -56,6 +56,12 @@ class ChordLogger:
     def found_successor(self, key, successor_id):
         self.log_event("found_successor", key=key, successor_id=successor_id)
 
+    def updated_successor(self, successor_id):
+        self.log_event("updated_successor", successor_id=successor_id)
+
+    def updated_predecessor(self, predecessor_id):
+        self.log_event("updated_successor", predecessor_id=predecessor_id)
+
     def passing_successor_check(self, key, successor_id):
         self.log_event("passing_successor_check", key=key, successor_id=successor_id)
 
