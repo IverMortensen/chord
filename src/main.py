@@ -1,22 +1,11 @@
 import hashlib
 import logging as log
 import sys
-import random
 from http.server import ThreadingHTTPServer
-from time import sleep
-from threading import Thread
 
 from chord_node import ChordNode
 from log import init_logger
 from http_handler import create_handler
-
-
-def run_periodic_function(func, min_delay=5, max_delay=10):
-    """Run a function periodically with random delays"""
-    while True:
-        delay = random.uniform(min_delay, max_delay)
-        sleep(delay)
-        func()
 
 
 def main():
@@ -34,21 +23,6 @@ def main():
     # Setup chord node
     node = ChordNode(ip=ip, port=port, id=id, m=m)
     log.info(f"Node initialized: \n\tID: {id} \n\tm: {m}")
-
-    # Schedule periodic functions
-    stabilize = Thread(
-        target=run_periodic_function, args=(node.stabilize,), daemon=True
-    )
-    fix_fingers = Thread(
-        target=run_periodic_function, args=(node.fix_fingers,), daemon=True
-    )
-    check_predecessor = Thread(
-        target=run_periodic_function, args=(node.check_predecessor,), daemon=True
-    )
-
-    stabilize.start()
-    fix_fingers.start()
-    check_predecessor.start()
 
     # Start HTTP server
     handler = create_handler(node)
