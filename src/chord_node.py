@@ -23,18 +23,31 @@ class ChordNode:
             self, f"/mnt/users/imo059/chord_logs/chord_log-{self.id}.log"
         )
 
+    def create(self):
+        self.predecessor = None
+        self.successor = self.address
+
     def join(self, other: str):
         self.predecessor = None
-        self.successor = other
+
+        # Order the joined node to find a successor
+        response = chord_client.find_successor(other, self.id)
+        if response.status_code != 200:
+            # If no successor is found, fallback by setting joined node as successor
+            self.successor = other
+            return
+
+        self.successor = response.text
 
     def stabilize(self):
         # Get our successor's predecessor
         response = chord_client.get_predecessor(self.successor)
-        if response.status_code == 404:
+        if not response or response.status_code == 404:
             log.info("Successor doesn't have a predecessor.")
         elif response.status_code != 200:
             log.error(
-                f"Stabilize failed. Could not find predecessor of {self.successor}: {response.text}"
+                f"Stabilize failed. " +
+                 "Could not find predecessor of {self.successor}: {response.text}"
             )
         predecessor = response.text
 
@@ -43,7 +56,6 @@ class ChordNode:
         if response.status_code == 200:
             # If our successor's predecessor is us everything is fine
             if predecessor == self.address:
-                # log.info(f"Successor's predecessor is me: {self.id} <- {successor_id}")
                 return
 
             x = self.hash_key(predecessor)
@@ -99,7 +111,7 @@ class ChordNode:
             return
 
         response = chord_client.get_status(self.predecessor)
-        if response.status_code != 200:
+        if not response or response.status_code != 200:
             log.info(f"Predecessor {self.predecessor} has failed.")
             self.predecessor = None
 

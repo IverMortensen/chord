@@ -114,7 +114,8 @@ for i in "${!nodes[@]}"; do
     node="${nodes[$i]}"
     port="${ports[$i]}"
     echo "Sending $node:$port successor $boot_node"
-    curl -X POST "$node:$port/join/$boot_node"
+    curl -X POST "$node:$port/join?nprime=$boot_node"
+    sleep 1
     echo "Completed node $node"
 done
 

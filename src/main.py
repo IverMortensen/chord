@@ -33,7 +33,7 @@ def main():
 
     # Setup chord node
     node = ChordNode(ip=ip, port=port, id=id, m=m)
-    log.info(f"Node initialized: id:{id}, m:{m}")
+    log.info(f"Node initialized: \n\tID: {id} \n\tm: {m}")
 
     # Schedule periodic functions
     stabilize = Thread(
