@@ -75,7 +75,15 @@ class ChordLogger:
         else:
             self.log_event("updated_successor", predecessor_id=predecessor_id)
 
+    def updated_successor_list(self, successor_list: list):
+        log.info(f"Updated successor list: {successor_list}")
+        self.log_event("updated_successor_list", successor_list=successor_list)
+
     def passing_successor_check(self, key, successor_id):
+        log.info(
+            f"{successor_id} is the closest node to {key}."
+            + f"Passing search to {successor_id}"
+        )
         self.log_event("passing_successor_check", key=key, successor_id=successor_id)
 
     def insert_value(self, key, value):
