@@ -18,8 +18,6 @@ ports=()
 endpoints=()
 hashes=()
 ids=()
-successor_endpoints=()
-successor_ids=()
 
 # Get available nodes
 readarray -t all_nodes < <(/share/ifi/available-nodes.sh)
@@ -71,28 +69,13 @@ for i in "${!nodes[@]}"; do
     done
 done
 
-# Get the successor ids of the nodes
-mapfile -t successor_ids < <(python3 get_successor_id_order.py $m ${endpoints[@]})
-
-# Use successor ids to find successor endpoints
-for i in "${!successor_ids[@]}"; do
-    successor_id="${successor_ids[$i]}"
-    for j in "${!ids[@]}"; do
-        if [ "${ids[$j]}" -eq "$successor_id" ]; then
-            successor_endpoints+=("${endpoints[$j]}")
-            break
-        fi
-    done
-done
-
 # Start processes
 for i in "${!nodes[@]}"; do
     node="${nodes[$i]}"
     node_endpoint="${endpoints[$i]}"
     id="${ids[$i]}"
-    successor_id="${successor_ids[$i]}"
 
-    echo "Starting process on $node_endpoint $id with successor $successor_endpoint $successor_id"
+    echo "Starting process on $node_endpoint $id"
 
     # Copy target to node (one for each proccess)
     # and start the proccess
@@ -107,13 +90,12 @@ done
 echo "Waiting for nodes to start..."
 sleep 6
 
-
-# Set up successors
+# Create chord network by telling all nodes to join one node
 boot_node="${nodes[0]}:${ports[0]}"
 for i in "${!nodes[@]}"; do
     node="${nodes[$i]}"
     port="${ports[$i]}"
-    echo "Sending $node:$port successor $boot_node"
+    echo "Telling $node:$port to join $boot_node"
     curl -X POST "$node:$port/join?nprime=$boot_node"
     echo "Completed node $node"
 done
