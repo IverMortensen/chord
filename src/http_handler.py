@@ -1,6 +1,5 @@
 import json
 from http.server import BaseHTTPRequestHandler
-import logging as log
 
 from chord_node import ChordNode
 import chord_client
@@ -9,14 +8,13 @@ import chord_client
 class HTTPHandler(BaseHTTPRequestHandler):
     def __init__(self, node: ChordNode, *args, **kwargs):
         self.node = node
-        self.sim_crash = False
         super().__init__(*args, **kwargs)
 
     def do_GET(self):
         """
         Handles get requests.
         """
-        if self.sim_crash:
+        if self.node.sim_crash:
             return
 
         # Check the path and run the associated function
@@ -24,7 +22,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
             self.get_status()
 
         elif self.path == ("/node-info"):
-            self.get_status()
+            self.get_node_info()
 
         elif self.path == ("/predecessor"):
             self.get_predecessor()
@@ -54,6 +52,9 @@ class HTTPHandler(BaseHTTPRequestHandler):
         elif self.path == "/network":
             self.get_network()
 
+        elif self.path == "/successor_list":
+            self.get_successor_list()
+
         # Unknown paths receive a 404
         else:
             self.send_error(404, "Not Found")
@@ -62,7 +63,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
         """
         Handles put requests.
         """
-        if self.sim_crash:
+        if self.node.sim_crash:
             return
 
         # Check the path and run the associated function
@@ -101,7 +102,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
         Handles post requests.
         """
         # Only sim-recover should be available when simulating a crash
-        if self.sim_crash:
+        if self.node.sim_crash:
             if self.path == "/sim-recover":
                 self.post_sim_recover()
             return
@@ -150,9 +151,9 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
         # Construct the info message
         info = {
-                "node_hash": self.node.id,
-                "successor": self.node.successor,
-                "others": list(neighbours),
+            "node_hash": self.node.id,
+            "successor": self.node.successor,
+            "others": list(neighbours),
         }
 
         self.send_response(200)
@@ -220,6 +221,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
             200 and the value if the value is found
             404 if key can't be found
             400 if process fails
+            500 Issue with connecting to the owner of the key
         """
         key = self.node.hash_key(raw_key)
         self.node.logger.log_client_request("get_storage", key)
@@ -227,12 +229,15 @@ class HTTPHandler(BaseHTTPRequestHandler):
         # Find responsible node
         successor = self.node.find_successor(key)
         if not successor:
-            self.send_error(404, f"Couldn't find owner of key '{key}'")
+            self.send_error(404, f"Couldn't find the owner of key '{key}'")
             return
 
         # Get the value
         response = chord_client.get_value(successor, raw_key)
-        if response.status_code != 200 or response.text is None:
+        if not response:
+            self.send_error(500, f"Couldn't connect to owner of key '{key}'")
+            return
+        if response.status_code != 200:
             self.send_error(response.status_code, response.text)
             return
         value = response.text
@@ -262,6 +267,18 @@ class HTTPHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(json.dumps(list(neighbours)).encode())
+
+    def get_successor_list(self):
+        """
+        Retrieves the successor list of the node.
+        Response:
+            200 Successful and the successor list
+        """
+        # Send response containing the neighbors
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(self.node.successor_list).encode())
 
     def put_notify(self):
         """
@@ -321,6 +338,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
         Response:
             200 On successful insertion
             400 Empty body or invalid encoding
+            500 Internal error
         """
         key = self.node.hash_key(raw_key)
         self.node.logger.log_client_request("put_storage", key=key)
@@ -346,8 +364,12 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
         # Insert value
         response = chord_client.set_value(successor, raw_key, value)
+        if response is None:
+            self.send_error(500, "Error occured while setting value")
+            return
         if response.status_code != 200:
             self.send_error(response.status_code, response.text)
+            return
 
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
@@ -450,6 +472,10 @@ class HTTPHandler(BaseHTTPRequestHandler):
         Response:
             200 When request has been received
         """
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+
         self.node.logger.leave()
 
         # Make successor node and predecessor node point to each other
@@ -464,10 +490,6 @@ class HTTPHandler(BaseHTTPRequestHandler):
         # Leave the network by creating a new network
         self.node.create()
 
-        self.send_response(200)
-        self.send_header("Content-Type", "text/plain")
-        self.end_headers()
-
     def post_sim_crash(self):
         """
         Tells a node to simulate that it has crashed.
@@ -475,7 +497,8 @@ class HTTPHandler(BaseHTTPRequestHandler):
             200 When request has been received
         """
         self.node.logger.log_client_request("sim-crash")
-        self.sim_crash = True
+        self.node.stop_periodic_functions()
+        self.node.sim_crash = True
 
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
@@ -488,11 +511,13 @@ class HTTPHandler(BaseHTTPRequestHandler):
             200 When request has been received
         """
         self.node.logger.log_client_request("sim_recover")
-        self.sim_crash = False
+        self.node.start_periodic_functions()
+        self.node.sim_crash = False
 
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
+
 
 def create_handler(node: ChordNode):
     def handler(*args, **kwargs):
