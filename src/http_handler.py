@@ -386,7 +386,11 @@ class HTTPHandler(BaseHTTPRequestHandler):
             self.send_error(400, "Invalid UTF-8 encoding")
             return
 
+        # Update successor
         self.node.successor = successor
+
+        successor_id = self.node.hash_key(successor)
+        self.node.logger.updated_successor(successor_id)
 
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
@@ -412,7 +416,11 @@ class HTTPHandler(BaseHTTPRequestHandler):
             self.send_error(400, "Invalid UTF-8 encoding")
             return
 
+        # Update predecessor
         self.node.predecessor = predecessor
+
+        predecessor_id = self.node.hash_key(predecessor)
+        self.node.logger.updated_predecessor(predecessor_id)
 
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
@@ -429,7 +437,6 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
         node_id = self.node.hash_key(node)
         successor_id = self.node.hash_key(self.node.successor)
-        log.info(f"Joined network of {node_id}. {self.node.id} -> {successor_id}")
         self.node.logger.join(node_id)
         self.node.logger.updated_successor(successor_id)
 
@@ -443,6 +450,8 @@ class HTTPHandler(BaseHTTPRequestHandler):
         Response:
             200 When request has been received
         """
+        self.node.logger.leave()
+
         # Make successor node and predecessor node point to each other
         if self.node.predecessor and self.node.successor:
             chord_client.set_successor(self.node.predecessor, self.node.successor)
@@ -465,6 +474,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
         Response:
             200 When request has been received
         """
+        self.node.logger.log_client_request("sim-crash")
         self.sim_crash = True
 
         self.send_response(200)
@@ -477,6 +487,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
         Response:
             200 When request has been received
         """
+        self.node.logger.log_client_request("sim_recover")
         self.sim_crash = False
 
         self.send_response(200)

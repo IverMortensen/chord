@@ -26,18 +26,24 @@ class ChordNode:
     def create(self):
         self.predecessor = None
         self.successor = self.address
+        self.logger.updated_successor(self.id)
+        self.logger.updated_predecessor(-1)
 
     def join(self, other: str):
         self.predecessor = None
+        self.logger.updated_predecessor(-1)
 
-        # Order the joined node to find a successor
+        # Find a successor within new network
         response = chord_client.find_successor(other, self.id)
-        if response.status_code != 200:
-            # If no successor is found, fallback by setting joined node as successor
-            self.successor = other
-            return
+        if response and response.status_code == 200:
+            successor = response.text
+        else:
+            # If no successor is found, fallback by setting node joined as successor
+            successor = other
 
-        self.successor = response.text
+        self.successor = successor
+        successor_id = self.hash_key(successor)
+        self.logger.updated_successor(successor_id)
 
     def stabilize(self):
         # Get our successor's predecessor
@@ -46,32 +52,32 @@ class ChordNode:
             log.info("Successor doesn't have a predecessor.")
         elif response.status_code != 200:
             log.error(
-                f"Stabilize failed. " +
-                 "Could not find predecessor of {self.successor}: {response.text}"
+                "Stabilize failed. " +
+                f"Could not find predecessor of {self.successor}: {response.text}"
             )
-        predecessor = response.text
 
-        successor_id = self.hash_key(self.successor)
+        # If successor has a predecessor...
+        if response and response.status_code == 200:
+            successor_id = self.hash_key(self.successor)
+            predecessor = response.text
 
-        if response.status_code == 200:
             # If our successor's predecessor is us everything is fine
             if predecessor == self.address:
                 return
 
-            x = self.hash_key(predecessor)
+            predecessor_id = self.hash_key(predecessor)
 
             # Check if the predecessor is within us and our successor
             within = False
             if self.id < successor_id:
-                within = x > self.id and x <= successor_id
+                within = predecessor_id > self.id and predecessor_id <= successor_id
             else:
-                within = x > self.id or x <= successor_id
+                within = predecessor_id > self.id or predecessor_id <= successor_id
 
             # If this is the case update our successor
             if within:
-                self.logger.updated_successor(x)
-                log.info(f"Updating successor: {self.id} -> {x}")
                 self.successor = predecessor
+                self.logger.updated_successor(predecessor_id)
 
         # Notify successor that we might be its predecessor
         chord_client.notify(self.successor, self.address)
@@ -96,15 +102,18 @@ class ChordNode:
 
         # If predecessor isn't set or new predecessor is within, update predecessor
         if self.predecessor is None or within:
-            self.logger.updated_predecessor(new_predecessor_id)
-            log.info(f"Updating predecessor: {new_predecessor_id} <- {self.id}")
             self.predecessor = new_predecessor
+            self.logger.updated_predecessor(new_predecessor_id)
 
     def fix_fingers(self):
+        old_table = self.finger_table.copy()
         for i in range(1, self.m + 1):
             id = (self.id + 2 ** (i - 1)) % (2**self.m)
             self.finger_table[i] = self.find_successor(id)
-        self.logger.fix_fingers()
+
+        # Only log on change
+        if old_table != self.finger_table:
+            self.logger.fix_fingers()
 
     def check_predecessor(self):
         if self.predecessor is None:
@@ -114,6 +123,7 @@ class ChordNode:
         if not response or response.status_code != 200:
             log.info(f"Predecessor {self.predecessor} has failed.")
             self.predecessor = None
+            self.logger.updated_predecessor(-1)
 
     def insert_value(self, key: str, value: str):
         self.logger.insert_value(key, value)
@@ -150,8 +160,6 @@ class ChordNode:
         return None
 
     def find_successor(self, id: int) -> str | None:
-        self.logger.check_key(id)
-        log.info(f"{self.id} checking {id}...")
         if not self.successor:
             log.error(f"Node {self.id} does not have a successor")
             return None
@@ -168,7 +176,6 @@ class ChordNode:
         # If within first successor, return first successor
         if within:
             self.logger.found_successor(id, successor_id)
-            log.info(f"{successor_id} is the onwner of {id}")
             return self.successor
 
         # If not within successor, find and return the closest known node

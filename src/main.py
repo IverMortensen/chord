@@ -39,15 +39,15 @@ def main():
     stabilize = Thread(
         target=run_periodic_function, args=(node.stabilize,), daemon=True
     )
-    # fix_fingers = Thread(
-    #     target=run_periodic_function, args=(node.fix_fingers,), daemon=True
-    # )
+    fix_fingers = Thread(
+        target=run_periodic_function, args=(node.fix_fingers,), daemon=True
+    )
     check_predecessor = Thread(
         target=run_periodic_function, args=(node.check_predecessor,), daemon=True
     )
 
     stabilize.start()
-    # fix_fingers.start()
+    fix_fingers.start()
     check_predecessor.start()
 
     # Start HTTP server
