@@ -9,7 +9,7 @@ import chord_client
 from chord_logger import ChordLogger
 
 
-def run_periodic_function(func, stop_event, min_delay=10, max_delay=20):
+def run_periodic_function(func, stop_event, min_delay=10, max_delay=15):
     """Run a function periodically with random delays"""
     while not stop_event.is_set():
         delay = random.uniform(min_delay, max_delay)
@@ -31,6 +31,7 @@ class ChordNode:
         self.successor_list: List[str] = []
         self.predecessor: str | None = None
         self.finger_table: List[str | None] = [None] * (self.m + 1)
+        self.next = m
         self.storage = {}
         self.sim_crash = False
 
@@ -46,17 +47,17 @@ class ChordNode:
         # Create threads for periodic functions
         self.stabilize_thread = Thread(
             target=run_periodic_function,
-            args=(self.stabilize, self.stop_event),
+            args=(self.stabilize, self.stop_event, 1, 2),
             daemon=True,
         )
         self.fix_fingers_thread = Thread(
             target=run_periodic_function,
-            args=(self.fix_fingers, self.stop_event),
+            args=(self.fix_fingers, self.stop_event, 3, 5),
             daemon=True,
         )
         self.check_predecessor_thread = Thread(
             target=run_periodic_function,
-            args=(self.check_predecessor, self.stop_event),
+            args=(self.check_predecessor, self.stop_event, 1, 2),
             daemon=True,
         )
 
@@ -77,6 +78,7 @@ class ChordNode:
     def create(self):
         self.predecessor = None
         self.successor = self.address
+        self.successor_list = [self.address]
         self.logger.updated_successor(self.id)
         self.logger.updated_predecessor(-1)
 
@@ -97,11 +99,9 @@ class ChordNode:
         self.logger.updated_successor(successor_id)
 
     def update_successor_list(self):
-        old_successor_list = self.successor_list.copy()
-
         # Get the successor list of the successor
         response = chord_client.get_successor_list(self.successor)
-        if not response or response.status_code != 200:
+        if response is None or response.status_code != 200:
             log.warning("Failed to get successor's successor list")
             return
         successor_list = list(json.loads(response.text))
@@ -112,14 +112,13 @@ class ChordNode:
         # Limit the size of the successor list
         self.successor_list = successor_list[0 : self.r]
 
-        if self.successor_list != old_successor_list:
-            self.logger.updated_successor_list(self.successor_list)
+        self.logger.updated_successor_list(self.successor_list)
 
     def stabilize(self):
         # If successor has failed, remove it from the successor list
         # and update our successor
         response = chord_client.get_status(self.successor)
-        if not response or response.status_code != 200:
+        if response is None or response.status_code != 200:
             log.info(f"Successor {self.hash_key(self.successor)} has failed.")
             self.successor_list = self.successor_list[1:]
 
@@ -191,23 +190,24 @@ class ChordNode:
             self.logger.updated_predecessor(new_predecessor_id)
 
     def fix_fingers(self):
-        old_table = self.finger_table.copy()
-        for i in range(1, self.m + 1):
-            id = (self.id + 2 ** (i - 1)) % (2**self.m)
-            finger = self.find_successor(id)
-            if finger:
-                self.finger_table[i] = finger
+        self.next = self.next + 1
 
-        # Only log on change
-        if old_table != self.finger_table:
-            self.logger.fix_fingers()
+        if self.next > self.m:
+            self.next = 1
+
+        id = (self.id + 2 ** (self.next - 1)) % (2**self.m)
+        finger = self.find_successor(id)
+        if finger:
+            self.finger_table[self.next] = finger
+
+        self.logger.fix_fingers()
 
     def check_predecessor(self):
         if self.predecessor is None:
             return
 
         response = chord_client.get_status(self.predecessor)
-        if not response or response.status_code != 200:
+        if response is None or response.status_code != 200:
             log.info(f"Predecessor {self.predecessor} has failed.")
             self.predecessor = None
             self.logger.updated_predecessor(-1)
@@ -244,7 +244,7 @@ class ChordNode:
 
             # Check that node is available
             response = chord_client.get_status(finger)
-            if not response or response.status_code != 200:
+            if response is None or response.status_code != 200:
                 self.finger_table[i] = None
                 log.warning(f"Can't get a response from {successor_id}.")
                 continue
@@ -282,7 +282,7 @@ class ChordNode:
             # Pass the find successor check to the closest node and return its result
             self.logger.passing_successor_check(id, closest_node_id)
             response = chord_client.find_successor(closest_node, id)
-            if not response or response.status_code != 200:
+            if response is None or response.status_code != 200:
                 log.warning(
                     f"Failed to pass successor check to closest node {closest_node_id}."
                 )
@@ -293,7 +293,7 @@ class ChordNode:
         # Pass the successor check to the successor and return its result
         self.logger.passing_successor_check(id, successor_id)
         response = chord_client.find_successor(self.successor, id)
-        if not response or response.status_code != 200:
+        if response is None or response.status_code != 200:
             log.warning(f"Failed to pass successor check to successor {successor_id}.")
             return None
         successor = response.text
