@@ -10,9 +10,11 @@ if TYPE_CHECKING:
 
 
 class ChordLogger:
-    def __init__(self, node: ChordNode, log_file: str):
+    def __init__(self, node: ChordNode, log_dir: str):
         self.node = node
-        self.log_file = log_file
+        log_dir = os.path.expanduser(log_dir)
+        os.makedirs(log_dir, exist_ok=True)
+        self.log_file = f"{log_dir}/{self.node.address}-{self.node.id}.log"
 
     def log_event(self, event_type, **kwargs):
         event = {
@@ -21,9 +23,6 @@ class ChordLogger:
             "event": event_type,
             **kwargs,
         }
-        log_dir = os.path.dirname(self.log_file)
-        os.makedirs(log_dir, exist_ok=True)
-
         with open(self.log_file, "a") as f:
             f.write(json.dumps(event) + "\n")
 
@@ -39,7 +38,7 @@ class ChordLogger:
 
         self.log_event(
             "status",
-            successor=self.node.hash_key(self.node.successor),
+            successor=self.node.hash(self.node.successor),
             num_keys=len(self.node.storage),
             storage=self.node.storage,
             m=self.node.m,
@@ -58,17 +57,17 @@ class ChordLogger:
     def leave(self):
         self.log_event("leave_network")
 
-    def check_key(self, key):
+    def check_key(self, key: int):
         self.log_event("check_key", key=key)
 
-    def found_successor(self, key, successor_id):
+    def found_successor(self, key: int, successor_id: int):
         self.log_event("found_successor", key=key, successor_id=successor_id)
 
-    def updated_successor(self, successor_id):
+    def updated_successor(self, successor_id: int):
         log.info(f"Updating successor: {self.node.id} -> {successor_id}")
         self.log_event("updated_successor", successor_id=successor_id)
 
-    def updated_predecessor(self, predecessor_id):
+    def updated_predecessor(self, predecessor_id: int):
         log.info(f"Updating predecessor: {predecessor_id} <- {self.node.id}")
         if predecessor_id == -1:
             self.log_event("updated_successor", predecessor_id="None")
@@ -79,17 +78,17 @@ class ChordLogger:
         log.info(f"Updated successor list: {successor_list}")
         self.log_event("updated_successor_list", successor_list=successor_list)
 
-    def passing_successor_check(self, key, successor_id):
+    def passing_successor_check(self, key: int, successor_id: int):
         log.info(
             f"{successor_id} is the closest node to {key}."
             + f"Passing search to {successor_id}"
         )
         self.log_event("passing_successor_check", key=key, successor_id=successor_id)
 
-    def insert_value(self, key, value):
+    def insert_value(self, key: str, value):
         self.log_event("insert_key", key=key, value=value)
 
-    def get_value(self, key, value):
+    def get_value(self, key: str, value):
         self.log_event("get_key", key=key, value=value)
 
     def fix_fingers(self):
@@ -99,7 +98,7 @@ class ChordLogger:
             if not finger:
                 finger_table.append("None")
                 continue
-            finger_id = self.node.hash_key(finger)
+            finger_id = self.node.hash(finger)
             finger_table.append(str(finger_id))
 
         self.log_event("fix_fingers", finger_table=finger_table)

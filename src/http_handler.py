@@ -24,6 +24,9 @@ class HTTPHandler(BaseHTTPRequestHandler):
         elif self.path == ("/node-info"):
             self.get_node_info()
 
+        elif self.path == ("/successor"):
+            self.get_successor()
+
         elif self.path == ("/predecessor"):
             self.get_predecessor()
 
@@ -137,6 +140,23 @@ class HTTPHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
 
+    def get_successor(self):
+        """
+        Check if a node can reach its successor.
+        Response:
+            200 Successful and the successor in body
+            404 Failed to reach successor
+        """
+        response = chord_client.get_status(self.node.successor)
+        if response is None or response.status_code != 200:
+            self.send_error(404, "Can't reach successor")
+            return
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(self.node.successor.encode())
+
     def get_node_info(self):
         """
         Get info about the node.
@@ -223,7 +243,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
             400 if process fails
             500 Issue with connecting to the owner of the key
         """
-        key = self.node.hash_key(raw_key)
+        key = self.node.hash(raw_key)
         self.node.logger.log_client_request("get_storage", key)
 
         # Find responsible node
@@ -340,7 +360,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
             400 Empty body or invalid encoding
             500 Internal error
         """
-        key = self.node.hash_key(raw_key)
+        key = self.node.hash(raw_key)
         self.node.logger.log_client_request("put_storage", key=key)
 
         content_length = int(self.headers.get("Content-Length", 0))
@@ -411,7 +431,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
         # Update successor
         self.node.successor = successor
 
-        successor_id = self.node.hash_key(successor)
+        successor_id = self.node.hash(successor)
         self.node.logger.updated_successor(successor_id)
 
         self.send_response(200)
@@ -441,7 +461,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
         # Update predecessor
         self.node.predecessor = predecessor
 
-        predecessor_id = self.node.hash_key(predecessor)
+        predecessor_id = self.node.hash(predecessor)
         self.node.logger.updated_predecessor(predecessor_id)
 
         self.send_response(200)
@@ -457,8 +477,8 @@ class HTTPHandler(BaseHTTPRequestHandler):
         # Join the other nodes network
         self.node.join(node)
 
-        node_id = self.node.hash_key(node)
-        successor_id = self.node.hash_key(self.node.successor)
+        node_id = self.node.hash(node)
+        successor_id = self.node.hash(self.node.successor)
         self.node.logger.join(node_id)
         self.node.logger.updated_successor(successor_id)
 

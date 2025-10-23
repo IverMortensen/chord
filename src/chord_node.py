@@ -35,9 +35,7 @@ class ChordNode:
         self.storage = {}
         self.sim_crash = False
 
-        self.logger = ChordLogger(
-            self, f"/mnt/users/imo059/chord_logs/chord_log-{self.id}.log"
-        )
+        self.logger = ChordLogger(self, "~/imo059-chord-logs/")
         self.start_periodic_functions()
 
     def start_periodic_functions(self):
@@ -95,7 +93,7 @@ class ChordNode:
             successor = other
 
         self.successor = successor
-        successor_id = self.hash_key(successor)
+        successor_id = self.hash(successor)
         self.logger.updated_successor(successor_id)
 
     def update_successor_list(self):
@@ -119,7 +117,7 @@ class ChordNode:
         # and update our successor
         response = chord_client.get_status(self.successor)
         if response is None or response.status_code != 200:
-            log.info(f"Successor {self.hash_key(self.successor)} has failed.")
+            log.info(f"Successor {self.hash(self.successor)} has failed.")
             self.successor_list = self.successor_list[1:]
 
             # Check if successor list is empty
@@ -133,6 +131,14 @@ class ChordNode:
 
             else:
                 self.successor = self.successor_list[0]
+                self.logger.updated_successor(self.hash(self.successor))
+
+                # Update successor list
+                self.update_successor_list()
+
+                # Notify successor that we might be its predecessor
+                chord_client.notify(self.successor, self.address)
+                return
 
         # Get our successor's predecessor
         response = chord_client.get_predecessor(self.successor)
@@ -145,8 +151,8 @@ class ChordNode:
         # If successor has a predecessor...
         elif response.status_code == 200:
             predecessor = response.text
-            successor_id = self.hash_key(self.successor)
-            predecessor_id = self.hash_key(predecessor)
+            successor_id = self.hash(self.successor)
+            predecessor_id = self.hash(predecessor)
 
             if predecessor != self.address:
                 # Check if the predecessor is within us and our successor
@@ -169,10 +175,10 @@ class ChordNode:
 
     def notify(self, new_predecessor: str):
         within = False
-        new_predecessor_id = self.hash_key(new_predecessor)
+        new_predecessor_id = self.hash(new_predecessor)
 
         if self.predecessor:
-            predecessor_id = self.hash_key(self.predecessor)
+            predecessor_id = self.hash(self.predecessor)
 
             # Check if the new predecessor is within current predecessor and us
             if predecessor_id < self.id:
@@ -221,7 +227,7 @@ class ChordNode:
         self.logger.get_value(key, value)
         return value
 
-    def hash_key(self, key: str) -> int:
+    def hash(self, key: str) -> int:
         hash = hashlib.sha1(key.encode()).hexdigest()
         return int(hash, 16) % (2**self.m)
 
@@ -234,7 +240,7 @@ class ChordNode:
 
             # Check that the id is within finger node
             within = False
-            successor_id = self.hash_key(finger)
+            successor_id = self.hash(finger)
             if self.id < id:
                 within = successor_id > self.id and successor_id < id
             else:
@@ -259,7 +265,7 @@ class ChordNode:
         # Check if the id is within the node's successor
         # If so, and its available, return the successor
         within = False
-        successor_id = self.hash_key(self.successor)
+        successor_id = self.hash(self.successor)
         if self.id < successor_id:
             within = id > self.id and id <= successor_id
         else:
@@ -277,7 +283,7 @@ class ChordNode:
         # Find and return the closest known node
         closest_node = self.closest_preceding_node(id)
         if closest_node:
-            closest_node_id = self.hash_key(closest_node)
+            closest_node_id = self.hash(closest_node)
 
             # Pass the find successor check to the closest node and return its result
             self.logger.passing_successor_check(id, closest_node_id)
