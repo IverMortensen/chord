@@ -13,16 +13,16 @@ def join_ring(new_node, existing_ring_node):
         print(f"    {new_node} JOIN response: {response.status_code}.")
 
 
-def get_info(node):
+def get_successor(node):
+    successor = ""
     try:
-        response = requests.get(f"http://{node}/node-info")
+        response = requests.get(f"http://{node}/successor")
+        if response.status_code == 200:
+            successor = response.text
     except:
-        return {}
-    info = {}
+        pass
 
-    if response.status_code == 200:
-        info = response.json()
-    return info
+    return successor
 
 
 def sim_crash(node: str):
@@ -48,11 +48,12 @@ def stabilize(host_ports, max_time=300, verbose=True):
 
     while len(unique_nodes_in_ring) < len(host_ports) and time.time() < end_time:
         time.sleep(0.1)
-        info = get_info(current_node)
+        successor = get_successor(current_node)
 
-        if "successor" in info:
-            unique_nodes_in_ring.add(info["successor"])
-            current_node = info["successor"]
+        if successor:
+            unique_nodes_in_ring.add(current_node)
+            current_node = successor
+
         # If a node doesn't respond, start from the first node again
         else:
             current_node = host_ports[0]

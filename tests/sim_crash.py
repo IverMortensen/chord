@@ -9,8 +9,8 @@ if __name__ == "__main__":
     num_nodes = int(sys.argv[1])
     host_ports = sys.argv[2:]
 
-    if num_nodes > len(host_ports):
-        print(f"Num nodes to crash {num_nodes} > nodes in ring {len(host_ports)}.")
+    if num_nodes >= len(host_ports):
+        print(f"Num nodes to crash {num_nodes} >= nodes in ring {len(host_ports)}.")
         exit(1)
 
     print(f"Crashing {num_nodes} node(s)...")
