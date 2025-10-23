@@ -6,7 +6,7 @@ if [ $# -eq 0 ]; then
 fi
 
 num_nodes=$1
-m=${2:-6}
+m=${2:-8}
 target="./src/"
 active_nodes_file="active_nodes.txt"
 stdout_dir="./stdout"
@@ -58,7 +58,7 @@ start_chord_node() {
     local node_endpoint="${endpoints[$i]}"
     local id="${ids[$i]}"
 
-    echo "    $node_endpoint    $id"
+    printf "    %-15s %s\n" "$node_endpoint" "$id"
 
     local temp_dir="/tmp/chord-$$-$id"
     {
@@ -106,7 +106,7 @@ echo ""
 
 # Start chord nodes
 echo "Starting nodes..."
-echo "    Address:      ID:"
+printf "    %-15s %s\n" "Address:" "ID:"
 for i in "${!nodes[@]}"; do
     start_chord_node "$i"
 done
