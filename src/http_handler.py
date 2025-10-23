@@ -234,7 +234,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
         # Get the value
         response = chord_client.get_value(successor, raw_key)
-        if not response:
+        if response is None:
             self.send_error(500, f"Couldn't connect to owner of key '{key}'")
             return
         if response.status_code != 200:
@@ -484,7 +484,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
             chord_client.set_predecessor(self.node.successor, self.node.predecessor)
 
         # Send keys to successor
-        for key, value in self.node.storage:
+        for key, value in self.node.storage.items():
             chord_client.set_value(self.node.successor, key, value)
 
         # Leave the network by creating a new network
