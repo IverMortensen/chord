@@ -1,97 +1,90 @@
-# 3200-a3
-Assignment 3 in INF-3200: Distributed hash table using Chord.
+# Chord
+Distributed hash table implementation using the Chord protocol.
 
 ## How to run
-The only step required is to run the **run.sh** script with a given number of chord nodes.
+Run the **run.sh** script with the desired number of Chord nodes:
 ```bash
 ./run.sh <num_chord_nodes> [m]
 ```
-- `num_chord_nodes`: Number of nodes to create in the Chord ring
-- `m`: Optional parameter that determines the size of the identifier space (defaults to 8 if not specified)
 
-The run script will:
-1. Start up all nodes with unique IDs, no collitions (just make sure `m` is large enough so the chord ring can fit all the nodes).
-2. Check that all the nodes are working, replacing any that don't.
-3. Tell all the nodes to join the network of one boot node.
-4. Wait for all the nodes to join the network, and to establish a complete chord ring,
-where every node is present.
+**Parameters:**
+- `num_chord_nodes`: Number of nodes to create in the Chord ring
+- `m`: (Optional) Bit length of the identifier space. Determines ring size as 2^m (default: 8)
+
+**What the script does:**
+1. Starts all nodes with unique IDs
+2. Verifies all nodes are running, replacing any that fail
+3. Instructs all nodes to join the network via a bootstrap node
+4. Waits for ring stabilization until all nodes are connected
 
 ## API
-These are the endpoints meant for client interaction.
 
-### GET
-**Get network information:**
-# 3200-a3
-Assignment 3 in INF-3200: Distributed hash table using Chord.
+### GET Endpoints
 
-## How to run
-The only step required is to run the **run.sh** script with a given number of chord nodes.
-```bash
-./run.sh <num_chord_nodes> [m]
-```
-- `num_chord_nodes`: Number of nodes to create in the Chord ring
-- `m`: Optional parameter that determines the size of the identifier space (defaults to 8 if not specified)
-
-The run script will:
-1. Start up all nodes with unique IDs
-2. Check that all the nodes are working, replacing any that don't
-3. Tells all the nodes to join the network of one boot node.
-4. Waits for all the nodes to join the network, and to establish a complete chord ring,
-where every node is present
-
-## API
-These are the enpoints meant for external interaction.
-
-### GET
 **Get node's successor:**
 ```
-GET http://<node_ip_port>/successor
+GET http://<node_ip:port>/successor
 ```
-The node will check if it can reach it's successor, and if it can it will respond with the successors address.
-This is useful for walking along the entire chord ring to see all the nodes, and to make sure the ring is whole.
+Returns the address of the node's successor if reachable. Useful for walking the ring and verifying ring completeness.
 
 **Get node information:**
 ```
-GET http://<node_ip_port>/node-info
+GET http://<node_ip:port>/node-info
 ```
-Lists node identifier, successor address, and neighbour addresses.
+Returns node identifier, successor address, and finger table entries.
 
 **Get network information:**
 ```
-GET http://<node_ip_port>/network
+GET http://<node_ip:port>/network
 ```
-Lists all nodes that the connected node knows about.
+Returns all nodes known to this node.
 
 **Retrieve stored value:**
 ```
-GET http://<node_ip_port>/storage/<key>
+GET http://<node_ip:port>/storage/<key>
 ```
 Retrieves the value associated with the given key.
 
----
+### PUT Endpoints
 
-### PUT
 **Store a value:**
 ```
-PUT http://<node_ip_port>/storage/<key>
+PUT http://<node_ip:port>/storage/<key>
 Body: <value>
 ```
-Stores the value (from request body) with the given key.
+Stores the value (from request body) under the given key.
 
----
+### POST Endpoints
 
-### POST
-**Post join:**
+**Join network:**
 ```
-POST http://<node_ip_port>/join?nprime=<other_node>
+POST http://<node_ip:port>/join?nprime=<bootstrap_node>
 ```
-Tell a node to join the other node's chord network.
+Instructs the node to join the Chord network via the specified bootstrap node.
 
-**Post leave:**
+**Leave network:**
 ```
-POST http://<node_ip_port>/leave
+POST http://<node_ip:port>/leave
 ```
-Tell a node to leave it's current network.
-The node will create a new network with only itself.
+Instructs the node to leave its current network. The node will transfer its data to its successor and form a singleton network.
 
----
+## Examples
+
+**Starting a 10-node ring with m=6:**
+```bash
+./run.sh 10 6
+```
+
+**Storing and retrieving a value:**
+```bash
+# Store
+curl -X PUT http://c7-15:50516/storage/mykey -d "myvalue"
+
+# Retrieve
+curl http://c7-15:50516/storage/mykey
+```
+
+**Walking the ring:**
+```bash
+curl http://c7-15:50516/successor
+```
