@@ -13,6 +13,21 @@ def join_ring(new_node, existing_ring_node):
         print(f"    {new_node} JOIN response: {response.status_code}.")
 
 
+def store_value(node: str, key: str, value: str):
+    response = requests.put(f"http://{node}/storage/{key}", data=value)
+    print(f"    {node} STORE response: {response.status_code}")
+
+
+def get_value(node: str, key: str) -> str | None:
+    response = requests.get(f"http://{node}/storage/{key}")
+    print(f"    {node} GET response: {response.status_code}")
+
+    if response.status_code == 200:
+        return response.text
+
+    return None
+
+
 def get_successor(node):
     successor = ""
     try:
@@ -63,7 +78,7 @@ def stabilize(host_ports, max_time=300, verbose=True):
 
     if verbose:
         if success:
-            print("    All nodes stabilized.")
+            print("    Chord ring stabilized.")
         else:
             print("    Timeout. Some nodes can't be found.")
             print(f"    Nodes found: {len(unique_nodes_in_ring)} / {len(host_ports)}")
