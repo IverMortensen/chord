@@ -24,7 +24,7 @@ class ChordNode:
         self.port: int = port
         self.address = f"{ip}:{port}"
         self.m: int = m
-        self.r: int = 4
+        self.r: int = m
 
         self.id: int = id
         self.successor: str = self.address
